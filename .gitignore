@@ -1,0 +1,35 @@
+# Virtual environment
+venv/
+.env/
+
+# Python
+__pycache__/
+*.pyc
+
+# Streamlit
+.streamlit/
+
+# Generated outputs
+outputs/
+
+# Raw videos
+data/raw/
+
+# Processed/generated data
+data/processed/
+
+# Model files
+*.keras
+*.h5
+*.ckpt
+
+# Temporary files
+*.tmp
+*.log
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
