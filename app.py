@@ -37,6 +37,101 @@ if str(SRC_PATH) not in sys.path:
 
 from temporal.video_temporal_predict_v3 import analyze_video
 
+# ============================================================
+# MODEL PATH COMPATIBILITY
+# ============================================================
+
+MODEL_FILENAME = "procedural_error_cnn_lstm_v3.keras"
+
+
+def _find_local_model():
+    """
+    Find the CNN-LSTM V3 model anywhere inside the project,
+    while ignoring the virtual environment and Git metadata.
+    """
+    search_roots = [
+        PROJECT_ROOT / "models",
+        PROJECT_ROOT / "src",
+        PROJECT_ROOT / "data",
+        PROJECT_ROOT / "outputs",
+        PROJECT_ROOT,
+    ]
+
+    checked = set()
+
+    for root in search_roots:
+        if not root.exists():
+            continue
+
+        try:
+            for path in root.rglob(MODEL_FILENAME):
+                path_str = str(path.resolve())
+
+                if path_str in checked:
+                    continue
+
+                checked.add(path_str)
+
+                if "\\venv\\" in path_str or "/venv/" in path_str:
+                    continue
+
+                if "\\.git\\" in path_str or "/.git/" in path_str:
+                    continue
+
+                return path
+        except (OSError, PermissionError):
+            continue
+
+    return None
+
+
+def _prepare_model_compatibility():
+    """
+    Some older predictor versions expect the model at:
+
+        PROJECT_ROOT / "ProceVision-AI" / "models"
+
+    while the actual project normally keeps it at:
+
+        PROJECT_ROOT / "models"
+
+    If the model exists elsewhere, create the expected compatibility
+    location so the existing temporal predictor can load it without
+    changing the trained model itself.
+    """
+    actual_model = _find_local_model()
+
+    if actual_model is None:
+        raise FileNotFoundError(
+            "CNN-LSTM V3 model was not found. Expected file: "
+            f"{MODEL_FILENAME}. "
+            "Place the trained model inside the project's models folder."
+        )
+
+    expected_locations = [
+        PROJECT_ROOT / "models" / MODEL_FILENAME,
+        PROJECT_ROOT / "ProceVision-AI" / "models" / MODEL_FILENAME,
+    ]
+
+    # If the model is already in one of the expected locations, nothing
+    # needs to be copied.
+    for expected in expected_locations:
+        try:
+            if expected.resolve() == actual_model.resolve():
+                return actual_model
+        except OSError:
+            pass
+
+    # The error shown by the app indicates that an older predictor is
+    # looking for the nested ProceVision-AI/models location.
+    nested_expected = expected_locations[1]
+
+    if not nested_expected.exists():
+        nested_expected.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(actual_model, nested_expected)
+
+    return actual_model
+
 
 # ============================================================
 # PAGE CONFIG
@@ -687,7 +782,7 @@ if uploaded_video is not None:
     if st.button(
         "🚀 Analyze Video",
         type="primary",
-        use_container_width=True
+        width="stretch"
     ):
 
         try:
@@ -713,13 +808,21 @@ if uploaded_video is not None:
             status = st.empty()
 
             status.info(
-                "Loading CNN-LSTM V3 model..."
+                "Checking CNN-LSTM V3 model..."
             )
 
-            progress.progress(20)
+            progress.progress(15)
+
+            model_path = _prepare_model_compatibility()
+
+            status.success(
+                f"CNN-LSTM V3 model ready: {model_path.name}"
+            )
+
+            progress.progress(25)
 
             status.info(
-                "Extracting video frames..."
+                "Extracting video frames and running temporal analysis..."
             )
 
             progress.progress(40)
@@ -1247,7 +1350,7 @@ if "video_result" in st.session_state:
 
     st.dataframe(
         sequence_data,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
